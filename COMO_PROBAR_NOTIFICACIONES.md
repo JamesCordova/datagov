@@ -29,7 +29,7 @@ adb shell pm clear com.example.datagov
 - La notificación dirá: "Nuevo proyecto disponible"
 - Mostrará el nombre del último proyecto en Firebase
 
-### Logs esperados:
+### Logs esperados (CON notificación - Primera vez):
 ```
 D/WorkManagerScheduler: WorkManager ejecutado inmediatamente
 D/CheckNewProjectsWorker: ═══════════════════════════════
@@ -37,20 +37,20 @@ D/CheckNewProjectsWorker: Worker iniciado - Verificando nuevos proyectos
 D/CheckNewProjectsWorker: PASO 1: Consultando Firebase...
 D/CheckNewProjectsWorker:    Cantidad de proyectos en respuesta: 1
 D/CheckNewProjectsWorker:    Proyecto #1 encontrado:
-D/CheckNewProjectsWorker:       ID: proj_1765659342541
-D/CheckNewProjectsWorker:       name: Teleferico
+D/CheckNewProjectsWorker:       ID: proj_1765659533527
+D/CheckNewProjectsWorker:       name: teleferico
 D/CheckNewProjectsWorker: ✅ Último proyecto obtenido:
-D/CheckNewProjectsWorker:    - ID: proj_1765659342541
-D/CheckNewProjectsWorker:    - Nombre: Teleferico
-D/CheckNewProjectsWorker:    - createdAt: 1765659342541
+D/CheckNewProjectsWorker:    - ID: proj_1765659533527
+D/CheckNewProjectsWorker:    - Nombre: teleferico
+D/CheckNewProjectsWorker:    - createdAt: 1765659533527
 D/CheckNewProjectsWorker: PASO 2: Leyendo almacenamiento local...
 D/CheckNewProjectsWorker: ✅ Último proyecto notificado guardado: null
 D/CheckNewProjectsWorker: PASO 3: Comparando IDs...
-D/CheckNewProjectsWorker:    Firebase ID: 'proj_1765659342541'
+D/CheckNewProjectsWorker:    Firebase ID: 'proj_1765659533527'
 D/CheckNewProjectsWorker:    Local ID:    'null'
 D/CheckNewProjectsWorker: 🔔 ¡NUEVO PROYECTO DETECTADO! Los IDs son diferentes
 D/CheckNewProjectsWorker: PASO 4: Enviando notificación...
-D/CheckNewProjectsWorker:    → Creando notificación para: Teleferico
+D/CheckNewProjectsWorker:    → Creando notificación para: teleferico
 D/CheckNewProjectsWorker:    → Creando canal de notificación (Android 8+)
 D/CheckNewProjectsWorker:    → Mostrando notificación con ID: 1001
 D/CheckNewProjectsWorker:    ✅ Notificación enviada exitosamente
@@ -58,6 +58,16 @@ D/CheckNewProjectsWorker: PASO 5: Guardando nuevo ID en SharedPreferences...
 D/CheckNewProjectsWorker: ✅ Notificación enviada y ID guardado exitosamente
 D/CheckNewProjectsWorker: ═══════════════════════════════
 ```
+
+### Logs esperados (SIN notificación - Ya notificado):
+```
+D/CheckNewProjectsWorker: PASO 3: Comparando IDs...
+D/CheckNewProjectsWorker:    Firebase ID: 'proj_1765659533527'
+D/CheckNewProjectsWorker:    Local ID:    'proj_1765659533527'
+D/CheckNewProjectsWorker: ℹ️ No hay proyectos nuevos - Los IDs son iguales
+D/CheckNewProjectsWorker: ═══════════════════════════════
+```
+**Nota:** Esto es CORRECTO. No debe notificar del mismo proyecto dos veces.
 
 ---
 
@@ -224,6 +234,25 @@ adb shell pm clear com.example.datagov
 ---
 
 ## 🔍 Troubleshooting
+
+### ⚠️ CASO MÁS COMÚN: "No hay proyectos nuevos"
+
+Si ves estos logs:
+```
+Firebase ID: 'proj_1765659533527'
+Local ID:    'proj_1765659533527'
+ℹ️ No hay proyectos nuevos - Los IDs son iguales
+```
+
+**Significado:** ✅ **El sistema funciona perfectamente**, pero ya notificaste de ese proyecto.
+
+**Solución rápida:**
+```bash
+adb shell pm clear com.example.datagov
+```
+Luego ejecuta la prueba de nuevo → Verás la notificación 🔔
+
+---
 
 ### Problema: No aparece notificación
 
