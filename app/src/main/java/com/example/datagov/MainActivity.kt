@@ -4,20 +4,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.res.Configuration
-import androidx.compose.animation.animateColor
-import androidx.compose.animation.core.*
 import com.example.datagov.ui.theme.DataGovTheme
 import com.example.datagov.data.ThemePreferences
 import com.example.datagov.data.Project
@@ -229,15 +225,49 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                         val id = projectSnapshot.key ?: ""
                         val name = projectSnapshot.child("name").getValue(String::class.java) ?: ""
                         val ubicacion = projectSnapshot.child("ubicacion").getValue(String::class.java) ?: ""
-                        val categoryId = projectSnapshot.child("categoryId").getValue(Long::class.java)?.toString() ?: ""
+                        val description = projectSnapshot.child("description").getValue(String::class.java) ?: ""
+                        val picUrl = projectSnapshot.child("picUrl").getValue(String::class.java) ?: ""
+
+                        // Manejar categoryId que puede venir como String o Number
+                        val categoryIdRaw = projectSnapshot.child("categoryId").value
+                        val categoryId = when (categoryIdRaw) {
+                            is String -> categoryIdRaw
+                            is Long -> categoryIdRaw.toString()
+                            is Int -> categoryIdRaw.toString()
+                            else -> "0"
+                        }
+
+                        // Manejar createdAt
                         val createdAt = projectSnapshot.child("createdAt").getValue(Long::class.java) ?: System.currentTimeMillis()
+
+                        // Manejar presupuesto que puede venir como String o Number
+                        val presupuestoRaw = projectSnapshot.child("presupuesto").value
+                        val presupuesto = when (presupuestoRaw) {
+                            is Long -> presupuestoRaw
+                            is Int -> presupuestoRaw.toLong()
+                            is String -> presupuestoRaw.toLongOrNull() ?: 0L
+                            else -> 0L
+                        }
+
+                        // Manejar avance que puede venir como String o Number
+                        val avanceRaw = projectSnapshot.child("avance").value
+                        val avance = when (avanceRaw) {
+                            is Int -> avanceRaw
+                            is Long -> avanceRaw.toInt()
+                            is String -> avanceRaw.toIntOrNull() ?: 0
+                            else -> 0
+                        }
 
                         val project = Project(
                             id = id,
                             name = name,
                             ubicacion = ubicacion,
                             categoryId = categoryId,
-                            createdAt = createdAt
+                            createdAt = createdAt,
+                            description = description,
+                            presupuesto = presupuesto,
+                            avance = avance,
+                            picUrl = picUrl
                         )
                         projects.add(project)
                     } catch (e: Exception) {
@@ -341,82 +371,233 @@ fun SecondScreen(text: String, onBack: () -> Unit, onNavigateToThird: () -> Unit
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThirdScreen(onBack: () -> Unit) {
-    var isAnimating by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var ubicacion by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var categoryId by remember { mutableStateOf("0") }
+    var presupuesto by remember { mutableStateOf("") }
+    var avance by remember { mutableStateOf("0") }
+    var picUrl by remember { mutableStateOf("") }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "circleAnimation")
+    var isLoading by remember { mutableStateOf(false) }
+    var showSuccessMessage by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val animatedSize by infiniteTransition.animateFloat(
-        initialValue = 100f,
-        targetValue = 300f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sizeAnimation"
-    )
+    val scope = rememberCoroutineScope()
 
-    val animatedColor by infiniteTransition.animateColor(
-        initialValue = Color(0xFF6200EE),
-        targetValue = Color(0xFF03DAC5),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "colorAnimation"
-    )
-
-    val animatedAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alphaAnimation"
-    )
-
-    val currentSize = if (isAnimating) animatedSize else 100f
-    val currentColor = if (isAnimating) animatedColor else Color(0xFF6200EE)
-    val currentAlpha = if (isAnimating) animatedAlpha else 1f
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Animación de Círculo Mejorada",
-            fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
-
-        Canvas(
-            modifier = Modifier
-                .size(350.dp)
-                .padding(16.dp)
-        ) {
-            drawCircle(
-                color = currentColor.copy(alpha = currentAlpha),
-                radius = currentSize
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Agregar Nuevo Proyecto") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.Settings, contentDescription = "Volver")
+                    }
+                }
             )
+        },
+        snackbarHost = {
+            if (showSuccessMessage) {
+                Snackbar(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text("✅ Proyecto creado exitosamente")
+                }
+            }
+            errorMessage?.let { error ->
+                Snackbar(
+                    modifier = Modifier.padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.error
+                ) {
+                    Text(error)
+                }
+            }
         }
-
-        Button(
-            onClick = { isAnimating = !isAnimating },
-            modifier = Modifier.padding(top = 32.dp)
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(text = if (isAnimating) "Detener Animación" else "Animar Círculo")
-        }
+            item {
+                Text(
+                    text = "Información del Proyecto",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
 
-        OutlinedButton(
-            onClick = onBack,
-            modifier = Modifier.padding(top = 16.dp)
-        ) {
-            Text(text = "Volver al Inicio")
+            item {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre del Proyecto *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = ubicacion,
+                    onValueChange = { ubicacion = it },
+                    label = { Text("Ubicación *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Descripción") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    minLines = 3,
+                    maxLines = 5
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = categoryId,
+                    onValueChange = { categoryId = it },
+                    label = { Text("ID de Categoría (0-5) *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = presupuesto,
+                    onValueChange = { presupuesto = it },
+                    label = { Text("Presupuesto") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = avance,
+                    onValueChange = { avance = it },
+                    label = { Text("Avance (0-100) *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                OutlinedTextField(
+                    value = picUrl,
+                    onValueChange = { picUrl = it },
+                    label = { Text("URL de Imagen") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading,
+                    singleLine = true
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        // Validación básica
+                        if (name.isBlank() || ubicacion.isBlank() || categoryId.isBlank() || avance.isBlank()) {
+                            errorMessage = "Por favor completa los campos obligatorios (*)"
+                            scope.launch {
+                                kotlinx.coroutines.delay(3000)
+                                errorMessage = null
+                            }
+                            return@Button
+                        }
+
+                        isLoading = true
+                        errorMessage = null
+
+                        // Crear proyecto en Firebase
+                        val database = FirebaseDatabase.getInstance()
+                        val projectsRef = database.getReference("Projects")
+
+                        val projectId = "proj_${System.currentTimeMillis()}"
+                        val projectData = hashMapOf<String, Any>(
+                            "id" to projectId,
+                            "name" to name,
+                            "ubicacion" to ubicacion,
+                            "description" to description,
+                            "categoryId" to categoryId,
+                            "presupuesto" to (presupuesto.toLongOrNull() ?: 0),
+                            "avance" to (avance.toIntOrNull() ?: 0),
+                            "picUrl" to picUrl,
+                            "createdAt" to System.currentTimeMillis()
+                        )
+
+                        projectsRef.child(projectId).setValue(projectData)
+                            .addOnSuccessListener {
+                                isLoading = false
+                                showSuccessMessage = true
+
+                                // Limpiar formulario
+                                name = ""
+                                ubicacion = ""
+                                description = ""
+                                categoryId = "0"
+                                presupuesto = ""
+                                avance = "0"
+                                picUrl = ""
+
+                                scope.launch {
+                                    kotlinx.coroutines.delay(2000)
+                                    showSuccessMessage = false
+                                }
+                            }
+                            .addOnFailureListener { exception ->
+                                isLoading = false
+                                errorMessage = "Error: ${exception.message}"
+                                scope.launch {
+                                    kotlinx.coroutines.delay(3000)
+                                    errorMessage = null
+                                }
+                            }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Crear Proyecto")
+                    }
+                }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
+                ) {
+                    Text("Cancelar")
+                }
+            }
         }
     }
 }
@@ -426,8 +607,6 @@ fun ThirdScreen(onBack: () -> Unit) {
 fun SettingsScreen(themePreferences: ThemePreferences) {
     val isDarkTheme by themePreferences.isDarkTheme.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var showTestMessage by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -435,15 +614,6 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
             TopAppBar(
                 title = { Text("Configuración") }
             )
-        },
-        snackbarHost = {
-            if (showTestMessage) {
-                Snackbar(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text("Worker ejecutado. Revisa los logs y notificaciones.")
-                }
-            }
         }
     ) { innerPadding ->
         Column(
@@ -524,6 +694,10 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
+
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    var showTestMessage by remember { mutableStateOf(false) }
+
                     Button(
                         onClick = {
                             WorkManagerScheduler.executeNow(context)
@@ -536,6 +710,15 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Ejecutar prueba ahora")
+                    }
+
+                    if (showTestMessage) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "✅ Worker ejecutado. Revisa los logs y notificaciones.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
