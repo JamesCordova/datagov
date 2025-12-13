@@ -1,0 +1,87 @@
+{
+  "project_info": {
+    "project_number": "231796399361",
+    "firebase_url": "https://datagov-15614-default-rtdb.firebaseio.com",
+    "project_id": "datagov-15614",
+    "storage_bucket": "datagov-15614.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231796399361:android:1ede383714177e9780cf00",
+        "android_client_info": {
+          "package_name": "com.aero.lab07"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBadYbawZ5h_zO8UJfh6ZZIYP62LsG0FyQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231796399361:android:fb96f28b83baf75c80cf00",
+        "android_client_info": {
+          "package_name": "com.aero.lab08"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBadYbawZ5h_zO8UJfh6ZZIYP62LsG0FyQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231796399361:android:b15367201dec5dc580cf00",
+        "android_client_info": {
+          "package_name": "com.aero.lab09"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBadYbawZ5h_zO8UJfh6ZZIYP62LsG0FyQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231796399361:android:2f5b9d9269edd6eb80cf00",
+        "android_client_info": {
+          "package_name": "com.example.datagov"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBadYbawZ5h_zO8UJfh6ZZIYP62LsG0FyQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
