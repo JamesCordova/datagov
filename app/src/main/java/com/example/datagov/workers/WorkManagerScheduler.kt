@@ -3,33 +3,14 @@ package com.example.datagov.workers
 import android.content.Context
 import android.util.Log
 import androidx.work.*
-import androidx.work.Constraints
 import java.util.concurrent.TimeUnit
 
 object WorkManagerScheduler {
     private const val TAG = "WorkManagerScheduler"
     private const val WORK_NAME = "check_new_projects_work"
 
-    // ═══════════════════════════════════════════════════════════════
-    // CONFIGURACIÓN DE FRECUENCIA DE VERIFICACIÓN
-    // ═══════════════════════════════════════════════════════════════
-    //
-    // Opciones disponibles (elige UNA):
-    //
-    // TESTING/DESARROLLO (más frecuente):
-    // private const val REPEAT_INTERVAL_HOURS = 1L      // Cada 1 hora
-    //
-    // PRODUCCIÓN (recomendado):
-    // private const val REPEAT_INTERVAL_HOURS = 3L      // Cada 3 horas
-    // private const val REPEAT_INTERVAL_HOURS = 6L      // Cada 6 horas
-    // private const val REPEAT_INTERVAL_HOURS = 12L     // Cada 12 horas (2 veces al día)
-    // private const val REPEAT_INTERVAL_HOURS = 24L     // Cada 24 horas (1 vez al día)
-    //
-    // NOTA: Android WorkManager tiene un intervalo MÍNIMO de 15 minutos
-    //       pero para verificaciones periódicas se recomienda al menos 1 hora
-    // ═══════════════════════════════════════════════════════════════
-
-    private const val REPEAT_INTERVAL_HOURS = 1L  // ← CAMBIA ESTE VALOR según necesites
+    // Intervalo de verificación (en horas)
+    private const val REPEAT_INTERVAL_HOURS = 1L
 
     fun schedulePeriodicWork(context: Context) {
         val constraints = Constraints.Builder()

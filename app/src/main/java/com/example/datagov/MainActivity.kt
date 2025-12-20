@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +40,14 @@ import com.example.datagov.ui.meetings.MeetingsScreen
 import com.example.datagov.ui.meetings.AddMeetingScreen
 import com.example.datagov.ui.meetings.MeetingDetailScreen
 import com.example.datagov.workers.WorkManagerScheduler
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import com.example.datagov.services.TimerService
+import android.content.Intent
+import android.os.Build
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -607,6 +617,52 @@ fun ThirdScreen(onBack: () -> Unit) {
 fun SettingsScreen(themePreferences: ThemePreferences) {
     val isDarkTheme by themePreferences.isDarkTheme.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    // Estado del temporizador (solo para saber si está activo o no)
+    var isTimerRunning by remember { mutableStateOf(false) }
+
+    // Verificar estado inicial y cuando se muestra la pantalla
+    LaunchedEffect(Unit) {
+        val running = TimerService.isServiceRunning(context)
+        Log.d("SettingsScreen", "Estado inicial del temporizador: $running")
+        isTimerRunning = running
+
+        // Verificar estado periódicamente cada segundo para asegurar sincronización
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            val currentState = TimerService.isServiceRunning(context)
+            if (isTimerRunning != currentState) {
+                Log.d("SettingsScreen", "Estado actualizado por polling: $currentState")
+                isTimerRunning = currentState
+            }
+        }
+    }
+
+    // Broadcast Receiver para recibir actualizaciones del temporizador
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                intent?.let {
+                    val running = it.getBooleanExtra(TimerService.EXTRA_IS_RUNNING, false)
+                    Log.d("SettingsScreen", "Broadcast recibido - isRunning: $running")
+                    isTimerRunning = running
+                }
+            }
+        }
+        
+        val filter = IntentFilter(TimerService.BROADCAST_TIMER_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(receiver, filter)
+        }
+        
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -620,6 +676,7 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             Text(
@@ -796,6 +853,135 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Sección de Temporizador
+            Text(
+                text = "Temporizador de Prueba",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Temporizador con notificación persistente",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Text(
+                        text = "Prueba de notificación con botones de control",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Estado del temporizador (solo mostrar cuando está activo)
+                    if (isTimerRunning) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "⏱️ Temporizador activo",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Text(
+                                    text = "Revisa la notificación para ver el tiempo",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // Botones de control
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                Log.d("SettingsScreen", "Botón Iniciar presionado - Estado actual: $isTimerRunning")
+                                val intent = Intent(context, TimerService::class.java).apply {
+                                    action = TimerService.ACTION_START
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    context.startForegroundService(intent)
+                                } else {
+                                    context.startService(intent)
+                                }
+                                // Actualizar estado inmediatamente
+                                isTimerRunning = true
+                                Log.d("SettingsScreen", "Estado actualizado a: $isTimerRunning")
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !isTimerRunning
+                        ) {
+                            Text("Iniciar")
+                        }
+
+                        Button(
+                            onClick = {
+                                Log.d("SettingsScreen", "Botón Detener presionado - Estado actual: $isTimerRunning")
+                                val intent = Intent(context, TimerService::class.java).apply {
+                                    action = TimerService.ACTION_STOP
+                                }
+                                context.startService(intent)
+                                // Actualizar estado inmediatamente
+                                isTimerRunning = false
+                                Log.d("SettingsScreen", "Estado actualizado a: $isTimerRunning")
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = isTimerRunning,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("Detener")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "• La notificación aparecerá cuando inicies el temporizador\n" +
+                               "• Usa los botones en la notificación para pausar/reanudar\n" +
+                               "• El botón 'Detener' eliminará la notificación",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 text = "Más opciones de configuración estarán disponibles próximamente.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -805,6 +991,7 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
         }
     }
 }
+
 
 // Previews
 @Preview(showBackground = true)
