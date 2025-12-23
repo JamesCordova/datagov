@@ -291,18 +291,20 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                         // Manejar presupuesto que puede venir como String o Number
                         val presupuestoRaw = projectSnapshot.child("presupuesto").value
                         val presupuesto = when (presupuestoRaw) {
+                            is Double -> presupuestoRaw.toLong()
                             is Long -> presupuestoRaw
                             is Int -> presupuestoRaw.toLong()
-                            is String -> presupuestoRaw.toLongOrNull() ?: 0L
+                            is String -> presupuestoRaw.toDoubleOrNull()?.toLong() ?: 0L
                             else -> 0L
                         }
 
                         // Manejar avance que puede venir como String o Number
                         val avanceRaw = projectSnapshot.child("avance").value
                         val avance = when (avanceRaw) {
+                            is Double -> avanceRaw.toInt()
                             is Int -> avanceRaw
                             is Long -> avanceRaw.toInt()
-                            is String -> avanceRaw.toIntOrNull() ?: 0
+                            is String -> avanceRaw.toDoubleOrNull()?.toInt() ?: 0
                             else -> 0
                         }
 
@@ -451,17 +453,19 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
 
                     val presupuestoRaw = snapshot.child("presupuesto").value
                     val presupuesto = when (presupuestoRaw) {
+                        is Double -> presupuestoRaw.toLong()
                         is Long -> presupuestoRaw
                         is Int -> presupuestoRaw.toLong()
-                        is String -> presupuestoRaw.toLongOrNull() ?: 0L
+                        is String -> presupuestoRaw.toDoubleOrNull()?.toLong() ?: 0L
                         else -> 0L
                     }
 
                     val avanceRaw = snapshot.child("avance").value
                     val avance = when (avanceRaw) {
+                        is Double -> avanceRaw.toInt()
                         is Int -> avanceRaw
                         is Long -> avanceRaw.toInt()
-                        is String -> avanceRaw.toIntOrNull() ?: 0
+                        is String -> avanceRaw.toDoubleOrNull()?.toInt() ?: 0
                         else -> 0
                     }
 
