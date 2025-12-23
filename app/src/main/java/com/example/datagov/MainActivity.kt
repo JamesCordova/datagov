@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.launch
 import com.example.datagov.data.MeetingDatabase
@@ -51,6 +52,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.datagov.services.TimerService
 import android.content.Intent
 import android.os.Build
+// import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,7 +93,7 @@ sealed class NavigationItem(
 
 sealed class Screen {
     object First : Screen()
-    data class Second(val text: String) : Screen()
+    data class Second(val projectId: String) : Screen()
     object Third : Screen()
     object Meetings : Screen()
     object AddMeeting : Screen()
@@ -140,8 +143,8 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
             when (val screen = currentScreen) {
                 is Screen.First -> {
                     FirstScreen(
-                        onNavigateToSecond = { text ->
-                            currentScreen = Screen.Second(text)
+                        onNavigateToSecond = { projectId ->
+                            currentScreen = Screen.Second(projectId)
                         },
                         onNavigateToThird = {
                             currentScreen = Screen.Third
@@ -150,7 +153,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                 }
                 is Screen.Second -> {
                     SecondScreen(
-                        text = screen.text,
+                        projectId = screen.projectId,
                         onBack = {
                             currentScreen = Screen.First
                             selectedTab = 0
@@ -355,7 +358,7 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
-                                .clickable { onNavigateToSecond(project.name) },
+                                .clickable { onNavigateToSecond(project.id) },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
@@ -388,12 +391,12 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                                 }
 
                                 Spacer(modifier = Modifier.height(4.dp))
-
-                                // Categoría con nombre real
+                                
+                                // Categoría con nombre real (sin etiqueta)
                                 Text(
-                                    text = "Categoría: ${category?.title ?: "Sin categoría"}",
+                                    text = category?.title ?: "Sin categoría", 
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -414,39 +417,312 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SecondScreen(text: String, onBack: () -> Unit, onNavigateToThird: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Segunda Pantalla",
-            fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () -> Unit) {
+    val database = FirebaseDatabase.getInstance()
+    val projectsRef = database.getReference("Projects")
+    val categoriesRef = database.getReference("Category")
+    
+    var project by remember { mutableStateOf<Project?>(null) }
+    var category by remember { mutableStateOf<Category?>(null) }
+    val isLoading = remember { mutableStateOf(true) }
 
-        Text(
-            text = "Texto recibido: $text",
-            fontSize = 18.sp,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
+    // Cargar el proyecto desde Firebase
+    LaunchedEffect(projectId) {
+        projectsRef.child(projectId).addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    val id = snapshot.key ?: ""
+                    val name = snapshot.child("name").getValue(String::class.java) ?: ""
+                    val ubicacion = snapshot.child("ubicacion").getValue(String::class.java) ?: ""
+                    val description = snapshot.child("description").getValue(String::class.java) ?: ""
+                    val picUrl = snapshot.child("picUrl").getValue(String::class.java) ?: ""
 
-        Button(
-            onClick = onBack,
-            modifier = Modifier.padding(top = 16.dp)
-        ) {
-            Text(text = "Volver")
+                    val categoryIdRaw = snapshot.child("categoryId").value
+                    val categoryId = when (categoryIdRaw) {
+                        is String -> categoryIdRaw
+                        is Long -> categoryIdRaw.toString()
+                        is Int -> categoryIdRaw.toString()
+                        else -> "0"
+                    }
+
+                    val createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: System.currentTimeMillis()
+
+                    val presupuestoRaw = snapshot.child("presupuesto").value
+                    val presupuesto = when (presupuestoRaw) {
+                        is Long -> presupuestoRaw
+                        is Int -> presupuestoRaw.toLong()
+                        is String -> presupuestoRaw.toLongOrNull() ?: 0L
+                        else -> 0L
+                    }
+
+                    val avanceRaw = snapshot.child("avance").value
+                    val avance = when (avanceRaw) {
+                        is Int -> avanceRaw
+                        is Long -> avanceRaw.toInt()
+                        is String -> avanceRaw.toIntOrNull() ?: 0
+                        else -> 0
+                    }
+
+                    project = Project(
+                        id = id,
+                        name = name,
+                        ubicacion = ubicacion,
+                        categoryId = categoryId,
+                        createdAt = createdAt,
+                        description = description,
+                        presupuesto = presupuesto,
+                        avance = avance,
+                        picUrl = picUrl
+                    )
+                    
+                    // Cargar la categoría
+                    categoriesRef.addListenerForSingleValueEvent(object : ValueEventListener {
+                        override fun onDataChange(catSnapshot: DataSnapshot) {
+                            for (categorySnapshot in catSnapshot.children) {
+                                val catId = categorySnapshot.child("id").getValue(String::class.java) ?: ""
+                                if (catId == categoryId) {
+                                    val title = categorySnapshot.child("title").getValue(String::class.java) ?: ""
+                                    val catPicUrl = categorySnapshot.child("picUrl").getValue(String::class.java) ?: ""
+                                    category = Category(id = catId, title = title, picUrl = catPicUrl)
+                                    break
+                                }
+                            }
+                            isLoading.value = false
+                        }
+
+                        override fun onCancelled(error: DatabaseError) {
+                            isLoading.value = false
+                        }
+                    })
+                } catch (e: Exception) {
+                    Log.e("Firebase", "Error al cargar proyecto: ${snapshot.value}", e)
+                    isLoading.value = false
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Firebase", "Error al leer proyecto: ${error.message}")
+                isLoading.value = false
+            }
+        })
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Detalle del Proyecto") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                    }
+                }
+            )
         }
+    ) { innerPadding ->
+        if (isLoading.value) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (project != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                // Imagen del proyecto
+                if (project!!.picUrl.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        elevation = CardDefaults.cardElevation(4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Imagen del Proyecto",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        // TODO: Descomentar cuando Gradle sincronice Coil
+                        // AsyncImage(
+                        //     model = project!!.picUrl,
+                        //     contentDescription = "Imagen del proyecto",
+                        //     modifier = Modifier.fillMaxSize(),
+                        //     contentScale = ContentScale.Crop
+                        // )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
-        TextButton(
-            onClick = onNavigateToThird,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Text("Ver animación", fontSize = 14.sp)
+                // Nombre del proyecto
+                Text(
+                    text = project!!.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Categoría
+                Text(
+                    text = category?.title ?: "Sin categoría",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Ubicación con ícono
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Ubicación",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = project!!.ubicacion,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Descripción
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Descripción",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = project!!.description,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Información financiera y de avance
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Presupuesto
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Presupuesto",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "S/ ${String.format("%,.0f", project!!.presupuesto.toDouble())}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+
+                    // Avance
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Avance",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${project!!.avance}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Barra de progreso
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Progreso del Proyecto",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { project!!.avance / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp),
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Fecha de creación
+                Text(
+                    text = "Creado: ${java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(project!!.createdAt))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Proyecto no encontrado")
+            }
         }
     }
 }
@@ -1080,7 +1356,7 @@ fun FirstScreenPreview() {
 @Composable
 fun SecondScreenPreview() {
     DataGovTheme {
-        SecondScreen(text = "Texto de ejemplo", onBack = {}, onNavigateToThird = {})
+        SecondScreen(projectId = "proj_001", onBack = {}, onNavigateToThird = {})
     }
 }
 

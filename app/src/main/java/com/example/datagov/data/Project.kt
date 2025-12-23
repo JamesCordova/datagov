@@ -5,10 +5,6 @@ data class Project(
     val name: String = "",
     val ubicacion: String = "",
     val categoryId: String = "",
-    val createdAt: Long = 0L,
-    val description: String = "",
-    val presupuesto: Long = 0L,
-    val avance: Int = 0,
-    val picUrl: String = ""
+    val createdAt: Long = 0L
 )
 

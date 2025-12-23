@@ -5,4 +5,3 @@ data class Category(
     val title: String = "",
     val picUrl: String = ""
 )
-
