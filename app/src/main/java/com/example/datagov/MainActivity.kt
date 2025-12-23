@@ -189,7 +189,11 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     )
                 }
                 is Screen.Dashboard -> {
-                    DashboardScreen()
+                    DashboardScreen(
+                        onNavigateToProjectDetail = { projectId ->
+                            currentScreen = Screen.Second(projectId)
+                        }
+                    )
                 }
                 is Screen.Meetings -> {
                     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1906,7 +1910,7 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(onNavigateToProjectDetail: (String) -> Unit = {}) {
     val database = FirebaseDatabase.getInstance()
     val projectsRef = database.getReference("Projects")
     val categoriesRef = database.getReference("Category")
@@ -2016,9 +2020,6 @@ fun DashboardScreen() {
     val proyectosPorCategoria = categories.map { category ->
         category to projects.count { it.categoryId == category.id }
     }.sortedByDescending { it.second }
-
-    // Top 5 proyectos con mayor presupuesto
-    val topProyectosPorPresupuesto = projects.sortedByDescending { it.presupuesto }.take(5)
 
     Scaffold(
         topBar = {
@@ -2468,6 +2469,202 @@ fun DashboardScreen() {
                                     text = "No hay datos disponibles",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Top 5 Proyectos
+                item {
+                    Text(
+                        text = "Top 5 Proyectos",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                item {
+                    var selectedFilter by remember { mutableStateOf<String?>(null) }
+
+                    val topProyectos = remember(projects, selectedFilter) {
+                        derivedStateOf {
+                            val filteredProjects = if (selectedFilter == null) {
+                                projects
+                            } else {
+                                projects.filter { it.categoryId == selectedFilter }
+                            }
+                            filteredProjects.sortedByDescending { it.presupuesto }.take(5)
+                        }
+                    }.value
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Selector de filtro
+                        Text(
+                            text = "Filtrar por categoría:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Chip "Todas las categorías"
+                            FilterChip(
+                                selected = selectedFilter == null,
+                                onClick = { selectedFilter = null },
+                                label = { Text("Todas") }
+                            )
+
+                            // Chips de categorías
+                            categories.take(8).forEach { category ->
+                                FilterChip(
+                                    selected = selectedFilter == category.id,
+                                    onClick = {
+                                        selectedFilter = if (selectedFilter == category.id) null else category.id
+                                    },
+                                    label = { Text(category.title, maxLines = 1) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Lista de proyectos top
+                        if (topProyectos.isNotEmpty()) {
+                            topProyectos.forEachIndexed { index, project ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onNavigateToProjectDetail(project.id) },
+                                    elevation = CardDefaults.cardElevation(2.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (index == 0)
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.surface
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Número de posición
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = when (index) {
+                                                    0 -> MaterialTheme.colorScheme.primary
+                                                    1 -> MaterialTheme.colorScheme.secondary
+                                                    2 -> MaterialTheme.colorScheme.tertiary
+                                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                                }
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "${index + 1}",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                                color = if (index < 3)
+                                                    MaterialTheme.colorScheme.onPrimary
+                                                else
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        // Información del proyecto
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = project.name,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 2
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+
+                                            // Categoría
+                                            val categoryName = categories.find { it.id == project.categoryId }?.title ?: "Sin categoría"
+                                            Text(
+                                                text = categoryName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+
+                                            // Presupuesto
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Settings,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", project.presupuesto.toDouble())}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        // Badge de avance
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = when {
+                                                    project.avance >= 100 -> MaterialTheme.colorScheme.primaryContainer
+                                                    project.avance >= 50 -> MaterialTheme.colorScheme.secondaryContainer
+                                                    else -> MaterialTheme.colorScheme.tertiaryContainer
+                                                }
+                                            )
+                                        ) {
+                                            Text(
+                                                text = "${project.avance}%",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (index < topProyectos.size - 1) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        } else {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Text(
+                                    text = if (selectedFilter != null)
+                                        "No hay proyectos en esta categoría"
+                                    else
+                                        "No hay proyectos disponibles",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(16.dp)
                                 )
                             }
                         }
