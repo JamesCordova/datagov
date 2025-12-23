@@ -370,11 +370,7 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Proyectos") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                title = { Text("Proyectos") }
             )
         }
     ) { innerPadding ->
@@ -399,7 +395,7 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Buscar por nombre, ubicación o categoría...") },
+                        placeholder = { Text("Nombre, ubicación o categoría...") },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Search,
