@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,8 +37,13 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.datagov.data.MeetingDatabase
 import com.example.datagov.data.MeetingRepository
 import com.example.datagov.ui.meetings.MeetingsScreen
@@ -231,6 +237,12 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
     val categories = remember { mutableStateListOf<Category>() }
     val isLoading = remember { mutableStateOf(true) }
 
+    // Estados de búsqueda y filtros
+    var searchQuery by remember { mutableStateOf("") }
+    var showFilters by remember { mutableStateOf(false) }
+    var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
+    var selectedLocationFilter by remember { mutableStateOf("") }
+
     // Listener para obtener categorías de Firebase
     LaunchedEffect(Unit) {
         categoriesRef.addValueEventListener(object : ValueEventListener {
@@ -335,41 +347,274 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
         })
     }
 
+    // Filtrar proyectos según búsqueda y filtros
+    val filteredProjects = remember(projects, searchQuery, selectedCategoryFilter, selectedLocationFilter) {
+        derivedStateOf {
+            projects.filter { project ->
+                val matchesSearch = searchQuery.isEmpty() ||
+                    project.name.contains(searchQuery, ignoreCase = true) ||
+                    project.ubicacion.contains(searchQuery, ignoreCase = true) ||
+                    categories.find { it.id == project.categoryId }?.title?.contains(searchQuery, ignoreCase = true) == true
+
+                val matchesCategory = selectedCategoryFilter == null || project.categoryId == selectedCategoryFilter
+
+                val matchesLocation = selectedLocationFilter.isEmpty() ||
+                    project.ubicacion.contains(selectedLocationFilter, ignoreCase = true)
+
+                matchesSearch && matchesCategory && matchesLocation
+            }
+        }
+    }.value
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(title = { Text("Lista de Proyectos") })
+            TopAppBar(
+                title = { Text("Proyectos") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            // Barra de búsqueda
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Campo de búsqueda principal
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Buscar por nombre, ubicación o categoría...") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Buscar",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        },
+                        trailingIcon = {
+                            Row {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Limpiar búsqueda"
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { showFilters = !showFilters }) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "Filtros",
+                                        tint = if (selectedCategoryFilter != null || selectedLocationFilter.isNotEmpty())
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    // Panel de filtros expandible
+                    if (showFilters) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        HorizontalDivider()
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Filtro por categoría
+                        Text(
+                            text = "Filtrar por categoría",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Chips de categorías
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Opción "Todas"
+                            FilterChip(
+                                selected = selectedCategoryFilter == null,
+                                onClick = { selectedCategoryFilter = null },
+                                label = { Text("Todas") }
+                            )
+
+                            // Chips de categorías
+                            categories.forEach { category ->
+                                FilterChip(
+                                    selected = selectedCategoryFilter == category.id,
+                                    onClick = {
+                                        selectedCategoryFilter = if (selectedCategoryFilter == category.id) null else category.id
+                                    },
+                                    label = { Text(category.title) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Filtro por ubicación
+                        Text(
+                            text = "Filtrar por ubicación",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = selectedLocationFilter,
+                            onValueChange = { selectedLocationFilter = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Ej: Lima, Arequipa, Cusco...") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = "Ubicación"
+                                )
+                            },
+                            trailingIcon = {
+                                if (selectedLocationFilter.isNotEmpty()) {
+                                    IconButton(onClick = { selectedLocationFilter = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "Limpiar"
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        // Botón para limpiar todos los filtros
+                        if (selectedCategoryFilter != null || selectedLocationFilter.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedButton(
+                                onClick = {
+                                    selectedCategoryFilter = null
+                                    selectedLocationFilter = ""
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Limpiar filtros")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Resultados de búsqueda
             if (isLoading.value) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator()
                 }
-            } else if (projects.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No hay proyectos disponibles.", style = MaterialTheme.typography.bodyMedium)
+            } else if (filteredProjects.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (searchQuery.isEmpty() && selectedCategoryFilter == null && selectedLocationFilter.isEmpty())
+                                "No hay proyectos disponibles"
+                            else
+                                "No se encontraron proyectos",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (searchQuery.isNotEmpty() || selectedCategoryFilter != null || selectedLocationFilter.isNotEmpty()) {
+                            Text(
+                                text = "Intenta con otros filtros",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                    items(projects) { project ->
+                // Contador de resultados
+                Text(
+                    text = "${filteredProjects.size} proyecto${if (filteredProjects.size != 1) "s" else ""} encontrado${if (filteredProjects.size != 1) "s" else ""}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredProjects) { project ->
                         // Buscar la categoría correspondiente
                         val category = categories.find { it.id == project.categoryId }
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
                                 .clickable { onNavigateToSecond(project.id) },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 // Nombre del proyecto sin etiqueta
                                 Text(
                                     text = project.name,
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                    fontWeight = FontWeight.Bold
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -403,16 +648,31 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                             }
                         }
                     }
+
+                    // Espacio final para el FAB
+                    item {
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
                 }
             }
+        }
 
+        // FloatingActionButton
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             FloatingActionButton(
                 onClick = onNavigateToThird,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Navegar a la tercera pantalla")
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Agregar proyecto"
+                )
             }
         }
     }
