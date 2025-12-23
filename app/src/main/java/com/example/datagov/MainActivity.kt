@@ -65,6 +65,11 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.datagov.services.TimerService
 import android.content.Intent
 import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.datagov.auth.AuthViewModel
+import com.example.datagov.auth.LoginScreen
+import com.example.datagov.auth.SignUpScreen
 // import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 
@@ -79,15 +84,58 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val isDarkTheme by themePreferences.isDarkTheme.collectAsState(initial = false)
+            val authViewModel: AuthViewModel = viewModel()
+            val authState by authViewModel.authState.collectAsState()
 
             DataGovTheme(darkTheme = isDarkTheme) {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    AppNavigation(
-                        modifier = Modifier.padding(innerPadding),
-                        themePreferences = themePreferences
+                // Si el usuario está autenticado, mostrar la app principal
+                // Si no, mostrar las pantallas de login/signup
+                if (authState.isAuthenticated) {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        AppNavigation(
+                            modifier = Modifier.padding(innerPadding),
+                            themePreferences = themePreferences,
+                            onSignOut = { authViewModel.signOut() }
+                        )
+                    }
+                } else {
+                    AuthNavigation(
+                        authState = authState,
+                        authViewModel = authViewModel
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AuthNavigation(
+    authState: com.example.datagov.auth.AuthState,
+    authViewModel: AuthViewModel
+) {
+    var showSignUp by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        if (showSignUp) {
+            SignUpScreen(
+                authState = authState,
+                onSignUp = { email, password ->
+                    authViewModel.signUp(email, password)
+                },
+                onNavigateToLogin = { showSignUp = false }
+            )
+        } else {
+            LoginScreen(
+                authState = authState,
+                onLogin = { email, password ->
+                    authViewModel.signIn(email, password)
+                },
+                onNavigateToSignUp = { showSignUp = true }
+            )
         }
     }
 }
@@ -117,9 +165,43 @@ sealed class Screen {
 }
 
 @Composable
-fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferences) {
+fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferences, onSignOut: () -> Unit) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     var selectedTab by remember { mutableStateOf(0) }
+
+    // Stack para mantener el historial de navegación
+    val navigationStack = remember { mutableStateListOf<Screen>() }
+
+    // Función para navegar guardando el historial
+    fun navigateTo(screen: Screen) {
+        navigationStack.add(currentScreen)
+        currentScreen = screen
+    }
+
+    // Función para navegar hacia atrás
+    fun navigateBack(): Boolean {
+        return if (navigationStack.isNotEmpty()) {
+            val previousScreen = navigationStack.removeAt(navigationStack.lastIndex)
+            currentScreen = previousScreen
+
+            // Actualizar el tab seleccionado según la pantalla
+            selectedTab = when (previousScreen) {
+                is Screen.Dashboard -> 0
+                is Screen.First -> 1
+                is Screen.Meetings -> 2
+                is Screen.Settings -> 3
+                else -> selectedTab
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    // Manejar el botón de retroceso del sistema
+    BackHandler(enabled = navigationStack.isNotEmpty()) {
+        navigateBack()
+    }
 
     val navigationItems = listOf(
         NavigationItem.Dashboard,
@@ -143,6 +225,8 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         selected = selectedTab == index,
                         onClick = {
                             selectedTab = index
+                            // Limpiar el stack al cambiar de tab principal
+                            navigationStack.clear()
                             currentScreen = when (index) {
                                 0 -> Screen.Dashboard
                                 1 -> Screen.First
@@ -161,10 +245,10 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                 is Screen.First -> {
                     FirstScreen(
                         onNavigateToSecond = { projectId ->
-                            currentScreen = Screen.Second(projectId)
+                            navigateTo(Screen.Second(projectId))
                         },
                         onNavigateToThird = {
-                            currentScreen = Screen.Third
+                            navigateTo(Screen.Third)
                         }
                     )
                 }
@@ -172,26 +256,32 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     SecondScreen(
                         projectId = screen.projectId,
                         onBack = {
-                            currentScreen = Screen.First
-                            selectedTab = 1
+                            if (!navigateBack()) {
+                                // Si no hay historial, ir a Dashboard
+                                currentScreen = Screen.Dashboard
+                                selectedTab = 0
+                            }
                         },
                         onNavigateToThird = {
-                            currentScreen = Screen.Third
+                            navigateTo(Screen.Third)
                         }
                     )
                 }
                 is Screen.Third -> {
                     ThirdScreen(
                         onBack = {
-                            currentScreen = Screen.First
-                            selectedTab = 1
+                            if (!navigateBack()) {
+                                // Si no hay historial, ir a Proyectos
+                                currentScreen = Screen.First
+                                selectedTab = 1
+                            }
                         }
                     )
                 }
                 is Screen.Dashboard -> {
                     DashboardScreen(
                         onNavigateToProjectDetail = { projectId ->
-                            currentScreen = Screen.Second(projectId)
+                            navigateTo(Screen.Second(projectId))
                         }
                     )
                 }
@@ -203,10 +293,10 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     MeetingsScreen(
                         repository = repository,
                         onNavigateToAdd = {
-                            currentScreen = Screen.AddMeeting
+                            navigateTo(Screen.AddMeeting)
                         },
                         onNavigateToDetail = { meetingId ->
-                            currentScreen = Screen.MeetingDetail(meetingId)
+                            navigateTo(Screen.MeetingDetail(meetingId))
                         }
                     )
                 }
@@ -218,8 +308,10 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     AddMeetingScreen(
                         repository = repository,
                         onBack = {
-                            currentScreen = Screen.Meetings
-                            selectedTab = 2
+                            if (!navigateBack()) {
+                                currentScreen = Screen.Meetings
+                                selectedTab = 2
+                            }
                         }
                     )
                 }
@@ -232,13 +324,18 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         meetingId = screen.meetingId,
                         repository = repository,
                         onBack = {
-                            currentScreen = Screen.Meetings
-                            selectedTab = 2
+                            if (!navigateBack()) {
+                                currentScreen = Screen.Meetings
+                                selectedTab = 2
+                            }
                         }
                     )
                 }
                 is Screen.Settings -> {
-                    SettingsScreen(themePreferences = themePreferences)
+                    SettingsScreen(
+                        themePreferences = themePreferences,
+                        onSignOut = onSignOut
+                    )
                 }
             }
         }
@@ -1486,7 +1583,7 @@ fun ThirdScreen(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(themePreferences: ThemePreferences) {
+fun SettingsScreen(themePreferences: ThemePreferences, onSignOut: () -> Unit = {}) {
     val isDarkTheme by themePreferences.isDarkTheme.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -1904,6 +2001,72 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Sección de Cuenta
+            Text(
+                text = "Cuenta",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Cerrar sesión",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "Salir de tu cuenta actual",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = onSignOut,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Cerrar sesión")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
