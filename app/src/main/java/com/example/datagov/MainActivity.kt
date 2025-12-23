@@ -15,10 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import android.content.res.Configuration
 import com.example.datagov.ui.theme.DataGovTheme
 import com.example.datagov.data.ThemePreferences
 import com.example.datagov.data.Project
+import com.example.datagov.data.Category
 import com.google.firebase.database.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.launch
 import com.example.datagov.data.MeetingDatabase
@@ -220,8 +223,40 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
 fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> Unit) {
     val database = FirebaseDatabase.getInstance()
     val projectsRef = database.getReference("Projects")
+    val categoriesRef = database.getReference("Category")
     val projects = remember { mutableStateListOf<Project>() }
+    val categories = remember { mutableStateListOf<Category>() }
     val isLoading = remember { mutableStateOf(true) }
+
+    // Listener para obtener categorías de Firebase
+    LaunchedEffect(Unit) {
+        categoriesRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                categories.clear()
+                for (categorySnapshot in snapshot.children) {
+                    try {
+                        val id = categorySnapshot.child("id").getValue(String::class.java) ?: ""
+                        val title = categorySnapshot.child("title").getValue(String::class.java) ?: ""
+                        val picUrl = categorySnapshot.child("picUrl").getValue(String::class.java) ?: ""
+
+                        val category = Category(
+                            id = id,
+                            title = title,
+                            picUrl = picUrl
+                        )
+                        categories.add(category)
+                    } catch (e: Exception) {
+                        Log.e("Firebase", "Error al cargar categoría: ${categorySnapshot.value}", e)
+                    }
+                }
+                Log.d("Firebase", "Categorías obtenidas: ${categories.size}")
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Firebase", "Error al leer categorías: ${error.message}")
+            }
+        })
+    }
 
     // Listener para obtener datos de Firebase
     LaunchedEffect(Unit) {
@@ -313,6 +348,9 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                     items(projects) { project ->
+                        // Buscar la categoría correspondiente
+                        val category = categories.find { it.id == project.categoryId }
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -322,9 +360,41 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(text = "Nombre: ${project.name}", style = MaterialTheme.typography.titleMedium)
-                                Text(text = "Ubicación: ${project.ubicacion}", style = MaterialTheme.typography.bodyMedium)
-                                Text(text = "Categoría ID: ${project.categoryId}", style = MaterialTheme.typography.bodySmall)
+                                // Nombre del proyecto sin etiqueta
+                                Text(
+                                    text = project.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Ubicación con ícono
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = "Ubicación",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = project.ubicacion,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                // Categoría con nombre real
+                                Text(
+                                    text = "Categoría: ${category?.title ?: "Sin categoría"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
