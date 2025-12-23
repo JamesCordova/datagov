@@ -44,6 +44,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,8 +99,8 @@ sealed class NavigationItem(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 ) {
-    object Home : NavigationItem("home", "Proyectos", Icons.Filled.Home, Icons.Outlined.Home)
-    object Dashboard : NavigationItem("dashboard", "Dashboard", Icons.Filled.Info, Icons.Outlined.Info)
+    object Dashboard : NavigationItem("dashboard", "Dashboard", Icons.Filled.Home, Icons.Outlined.Home)
+    object Home : NavigationItem("home", "Proyectos", Icons.Filled.List, Icons.Outlined.List)
     object Meetings : NavigationItem("meetings", "Meetings", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     object Settings : NavigationItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -114,12 +118,12 @@ sealed class Screen {
 
 @Composable
 fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferences) {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.First) }
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     var selectedTab by remember { mutableStateOf(0) }
 
     val navigationItems = listOf(
-        NavigationItem.Home,
         NavigationItem.Dashboard,
+        NavigationItem.Home,
         NavigationItem.Meetings,
         NavigationItem.Settings
     )
@@ -140,11 +144,11 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         onClick = {
                             selectedTab = index
                             currentScreen = when (index) {
-                                0 -> Screen.First
-                                1 -> Screen.Dashboard
+                                0 -> Screen.Dashboard
+                                1 -> Screen.First
                                 2 -> Screen.Meetings
                                 3 -> Screen.Settings
-                                else -> Screen.First
+                                else -> Screen.Dashboard
                             }
                         }
                     )
@@ -169,7 +173,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         projectId = screen.projectId,
                         onBack = {
                             currentScreen = Screen.First
-                            selectedTab = 0
+                            selectedTab = 1
                         },
                         onNavigateToThird = {
                             currentScreen = Screen.Third
@@ -180,7 +184,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     ThirdScreen(
                         onBack = {
                             currentScreen = Screen.First
-                            selectedTab = 0
+                            selectedTab = 1
                         }
                     )
                 }
@@ -211,7 +215,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         repository = repository,
                         onBack = {
                             currentScreen = Screen.Meetings
-                            selectedTab = 1
+                            selectedTab = 2
                         }
                     )
                 }
@@ -225,7 +229,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                         repository = repository,
                         onBack = {
                             currentScreen = Screen.Meetings
-                            selectedTab = 1
+                            selectedTab = 2
                         }
                     )
                 }
@@ -1064,7 +1068,17 @@ fun ThirdScreen(onBack: () -> Unit) {
                 Snackbar(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text("✅ Proyecto creado exitosamente")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text("Proyecto creado exitosamente")
+                    }
                 }
             }
             errorMessage?.let { error ->
@@ -1617,11 +1631,22 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "⏰ Frecuencia:",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DateRange,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Frecuencia:",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                                 Text(
                                     text = "Cada 1 hora",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -1634,11 +1659,22 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "📅 Primera vez:",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DateRange,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Primera vez:",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                                 Text(
                                     text = "15 min después de abrir",
                                     style = MaterialTheme.typography.bodySmall,
@@ -1651,11 +1687,22 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "🔔 Notifica cuando:",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Notifications,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Notifica cuando:",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                                 Text(
                                     text = "Hay proyecto nuevo",
                                     style = MaterialTheme.typography.bodySmall,
@@ -1696,11 +1743,22 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
 
                     if (showTestMessage) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "✅ Worker ejecutado. Revisa los logs y notificaciones.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Worker ejecutado. Revisa los logs y notificaciones.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
@@ -1762,7 +1820,7 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "⏱️ Temporizador activo",
+                                    text = "Temporizador activo",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
@@ -2000,18 +2058,30 @@ fun DashboardScreen() {
                                 .fillMaxWidth()
                                 .padding(20.dp)
                         ) {
-                            Text(
-                                text = "📊 Resumen General",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Vista general de todos los proyectos",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Home,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Column {
+                                    Text(
+                                        text = "Resumen General",
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Vista general de todos los proyectos",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -2044,9 +2114,11 @@ fun DashboardScreen() {
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = "📁",
-                                    style = MaterialTheme.typography.headlineMedium
+                                Icon(
+                                    imageVector = Icons.Filled.Home,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
@@ -2077,9 +2149,11 @@ fun DashboardScreen() {
                                     .padding(16.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = "📈",
-                                    style = MaterialTheme.typography.headlineMedium
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = MaterialTheme.colorScheme.secondary
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
@@ -2113,11 +2187,22 @@ fun DashboardScreen() {
                                 .padding(20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = "💰 Presupuesto Total",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.tertiary
+                                )
+                                Text(
+                                    text = "Presupuesto Total",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", presupuestoTotal.toDouble())}",
@@ -2383,64 +2468,6 @@ fun DashboardScreen() {
                                     text = "No hay datos disponibles",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Top proyectos por presupuesto
-                item {
-                    Text(
-                        text = "Top 5 Proyectos por Presupuesto",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                items(topProyectosPorPresupuesto) { project ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        elevation = CardDefaults.cardElevation(2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = project.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 2
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", project.presupuesto.toDouble())}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            // Badge de avance
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = when {
-                                        project.avance >= 100 -> MaterialTheme.colorScheme.primaryContainer
-                                        project.avance >= 50 -> MaterialTheme.colorScheme.secondaryContainer
-                                        else -> MaterialTheme.colorScheme.tertiaryContainer
-                                    }
-                                )
-                            ) {
-                                Text(
-                                    text = "${project.avance}%",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                 )
                             }
                         }
