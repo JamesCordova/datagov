@@ -737,16 +737,50 @@ fun ThirdScreen(onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var ubicacion by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var categoryId by remember { mutableStateOf("0") }
-    var presupuesto by remember { mutableStateOf("") }
-    var avance by remember { mutableStateOf("0") }
+    var selectedCategoryId by remember { mutableStateOf("") }
+    var presupuestoText by remember { mutableStateOf("") }
+    var avanceSlider by remember { mutableFloatStateOf(0f) }
     var picUrl by remember { mutableStateOf("") }
 
     var isLoading by remember { mutableStateOf(false) }
     var showSuccessMessage by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Estados para cargar categorías
+    val categories = remember { mutableStateListOf<Category>() }
+    var categoriesLoaded by remember { mutableStateOf(false) }
+    var expandedCategory by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
+    val database = FirebaseDatabase.getInstance()
+
+    // Cargar categorías desde Firebase
+    LaunchedEffect(Unit) {
+        val categoriesRef = database.getReference("Category")
+        categoriesRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                categories.clear()
+                for (categorySnapshot in snapshot.children) {
+                    try {
+                        val id = categorySnapshot.child("id").getValue(String::class.java) ?: ""
+                        val title = categorySnapshot.child("title").getValue(String::class.java) ?: ""
+                        val catPicUrl = categorySnapshot.child("picUrl").getValue(String::class.java) ?: ""
+                        categories.add(Category(id = id, title = title, picUrl = catPicUrl))
+                    } catch (e: Exception) {
+                        Log.e("Firebase", "Error al cargar categoría", e)
+                    }
+                }
+                categoriesLoaded = true
+                if (categories.isNotEmpty() && selectedCategoryId.isEmpty()) {
+                    selectedCategoryId = categories[0].id
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Firebase", "Error al cargar categorías: ${error.message}")
+            }
+        })
+    }
 
     Scaffold(
         topBar = {
@@ -754,7 +788,7 @@ fun ThirdScreen(onBack: () -> Unit) {
                 title = { Text("Agregar Nuevo Proyecto") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.Settings, contentDescription = "Volver")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
                 }
             )
@@ -784,11 +818,37 @@ fun ThirdScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Encabezado
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Nuevo Proyecto",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Completa la información del proyecto",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Sección: Información Básica
             item {
                 Text(
-                    text = "Información del Proyecto",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    text = "Información Básica",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
@@ -797,9 +857,19 @@ fun ThirdScreen(onBack: () -> Unit) {
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Nombre del Proyecto *") },
+                    placeholder = { Text("Ej: Construcción de Hospital Regional") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
-                    singleLine = true
+                    singleLine = false,
+                    minLines = 2,
+                    maxLines = 3,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 )
             }
 
@@ -808,9 +878,17 @@ fun ThirdScreen(onBack: () -> Unit) {
                     value = ubicacion,
                     onValueChange = { ubicacion = it },
                     label = { Text("Ubicación *") },
+                    placeholder = { Text("Ej: Lima, Arequipa, Cusco") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
-                    singleLine = true
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 )
             }
 
@@ -819,43 +897,173 @@ fun ThirdScreen(onBack: () -> Unit) {
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Descripción") },
+                    placeholder = { Text("Describe el proyecto...") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
-                    minLines = 3,
-                    maxLines = 5
+                    minLines = 4,
+                    maxLines = 8
+                )
+            }
+
+            // Sección: Categoría
+            item {
+                Text(
+                    text = "Categoría",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            item {
+                ExposedDropdownMenuBox(
+                    expanded = expandedCategory,
+                    onExpandedChange = { expandedCategory = !expandedCategory && !isLoading }
+                ) {
+                    OutlinedTextField(
+                        value = categories.find { it.id == selectedCategoryId }?.title ?: "Selecciona una categoría",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Categoría del Proyecto *") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        enabled = !isLoading,
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expandedCategory,
+                        onDismissRequest = { expandedCategory = false }
+                    ) {
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category.title) },
+                                onClick = {
+                                    selectedCategoryId = category.id
+                                    expandedCategory = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Sección: Información Financiera
+            item {
+                Text(
+                    text = "Información Financiera",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
             item {
                 OutlinedTextField(
-                    value = categoryId,
-                    onValueChange = { categoryId = it },
-                    label = { Text("ID de Categoría (0-5) *") },
+                    value = presupuestoText,
+                    onValueChange = {
+                        // Solo permitir números
+                        if (it.isEmpty() || it.all { char -> char.isDigit() || char == '.' }) {
+                            presupuestoText = it
+                        }
+                    },
+                    label = { Text("Presupuesto (S/)") },
+                    placeholder = { Text("Ej: 1500000") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
-                    singleLine = true
+                    singleLine = true,
+                    leadingIcon = {
+                        Text(
+                            text = "S/",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = 12.dp)
+                        )
+                    },
+                    supportingText = {
+                        if (presupuestoText.isNotEmpty()) {
+                            val valor = presupuestoText.toDoubleOrNull() ?: 0.0
+                            Text("≈ S/ ${String.format(java.util.Locale("es", "PE"), "%,.2f", valor)}")
+                        }
+                    }
+                )
+            }
+
+            // Sección: Avance del Proyecto
+            item {
+                Text(
+                    text = "Avance del Proyecto",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
             item {
-                OutlinedTextField(
-                    value = presupuesto,
-                    onValueChange = { presupuesto = it },
-                    label = { Text("Presupuesto") },
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading,
-                    singleLine = true
-                )
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Porcentaje de avance:",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "${avanceSlider.toInt()}%",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Slider(
+                            value = avanceSlider,
+                            onValueChange = { avanceSlider = it },
+                            valueRange = 0f..100f,
+                            steps = 99,
+                            enabled = !isLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LinearProgressIndicator(
+                            progress = { avanceSlider / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp),
+                            color = when {
+                                avanceSlider < 30 -> MaterialTheme.colorScheme.error
+                                avanceSlider < 70 -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                        )
+                    }
+                }
             }
 
+            // Sección: Imagen (Opcional)
             item {
-                OutlinedTextField(
-                    value = avance,
-                    onValueChange = { avance = it },
-                    label = { Text("Avance (0-100) *") },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading,
-                    singleLine = true
+                Text(
+                    text = "Imagen del Proyecto (Opcional)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
@@ -864,12 +1072,14 @@ fun ThirdScreen(onBack: () -> Unit) {
                     value = picUrl,
                     onValueChange = { picUrl = it },
                     label = { Text("URL de Imagen") },
+                    placeholder = { Text("https://ejemplo.com/imagen.png") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
                     singleLine = true
                 )
             }
 
+            // Botones de acción
             item {
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -877,63 +1087,79 @@ fun ThirdScreen(onBack: () -> Unit) {
             item {
                 Button(
                     onClick = {
-                        // Validación básica
-                        if (name.isBlank() || ubicacion.isBlank() || categoryId.isBlank() || avance.isBlank()) {
-                            errorMessage = "Por favor completa los campos obligatorios (*)"
+                        // Validación mejorada
+                        when {
+                            name.isBlank() -> {
+                                errorMessage = "❌ El nombre del proyecto es obligatorio"
+                            }
+                            name.length < 10 -> {
+                                errorMessage = "❌ El nombre debe tener al menos 10 caracteres"
+                            }
+                            ubicacion.isBlank() -> {
+                                errorMessage = "❌ La ubicación es obligatoria"
+                            }
+                            selectedCategoryId.isEmpty() -> {
+                                errorMessage = "❌ Debes seleccionar una categoría"
+                            }
+                            presupuestoText.isNotEmpty() && presupuestoText.toDoubleOrNull() == null -> {
+                                errorMessage = "❌ El presupuesto debe ser un número válido"
+                            }
+                            else -> {
+                                isLoading = true
+                                errorMessage = null
+
+                                // Crear proyecto en Firebase
+                                val projectsRef = database.getReference("Projects")
+                                val projectId = "proj_${System.currentTimeMillis()}"
+
+                                val projectData = hashMapOf<String, Any>(
+                                    "id" to projectId,
+                                    "name" to name.trim(),
+                                    "ubicacion" to ubicacion.trim(),
+                                    "description" to (description.trim().ifEmpty { "Descripción no disponible" }),
+                                    "categoryId" to selectedCategoryId,
+                                    "presupuesto" to (presupuestoText.toDoubleOrNull() ?: 0.0),
+                                    "avance" to avanceSlider.toDouble(),
+                                    "picUrl" to (picUrl.trim().ifEmpty { "https://example.com/default-pic.png" }),
+                                    "createdAt" to System.currentTimeMillis()
+                                )
+
+                                projectsRef.child(projectId).setValue(projectData)
+                                    .addOnSuccessListener {
+                                        isLoading = false
+                                        showSuccessMessage = true
+
+                                        // Limpiar formulario
+                                        name = ""
+                                        ubicacion = ""
+                                        description = ""
+                                        selectedCategoryId = if (categories.isNotEmpty()) categories[0].id else ""
+                                        presupuestoText = ""
+                                        avanceSlider = 0f
+                                        picUrl = ""
+
+                                        scope.launch {
+                                            kotlinx.coroutines.delay(2000)
+                                            showSuccessMessage = false
+                                        }
+                                    }
+                                    .addOnFailureListener { exception ->
+                                        isLoading = false
+                                        errorMessage = "❌ Error: ${exception.message}"
+                                        scope.launch {
+                                            kotlinx.coroutines.delay(3000)
+                                            errorMessage = null
+                                        }
+                                    }
+                            }
+                        }
+
+                        if (errorMessage != null) {
                             scope.launch {
                                 kotlinx.coroutines.delay(3000)
                                 errorMessage = null
                             }
-                            return@Button
                         }
-
-                        isLoading = true
-                        errorMessage = null
-
-                        // Crear proyecto en Firebase
-                        val database = FirebaseDatabase.getInstance()
-                        val projectsRef = database.getReference("Projects")
-
-                        val projectId = "proj_${System.currentTimeMillis()}"
-                        val projectData = hashMapOf<String, Any>(
-                            "id" to projectId,
-                            "name" to name,
-                            "ubicacion" to ubicacion,
-                            "description" to description,
-                            "categoryId" to categoryId,
-                            "presupuesto" to (presupuesto.toLongOrNull() ?: 0),
-                            "avance" to (avance.toIntOrNull() ?: 0),
-                            "picUrl" to picUrl,
-                            "createdAt" to System.currentTimeMillis()
-                        )
-
-                        projectsRef.child(projectId).setValue(projectData)
-                            .addOnSuccessListener {
-                                isLoading = false
-                                showSuccessMessage = true
-
-                                // Limpiar formulario
-                                name = ""
-                                ubicacion = ""
-                                description = ""
-                                categoryId = "0"
-                                presupuesto = ""
-                                avance = "0"
-                                picUrl = ""
-
-                                scope.launch {
-                                    kotlinx.coroutines.delay(2000)
-                                    showSuccessMessage = false
-                                }
-                            }
-                            .addOnFailureListener { exception ->
-                                isLoading = false
-                                errorMessage = "Error: ${exception.message}"
-                                scope.launch {
-                                    kotlinx.coroutines.delay(3000)
-                                    errorMessage = null
-                                }
-                            }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading
@@ -943,7 +1169,14 @@ fun ThirdScreen(onBack: () -> Unit) {
                             modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.onPrimary
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Creando...")
                     } else {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Crear Proyecto")
                     }
                 }
@@ -957,6 +1190,11 @@ fun ThirdScreen(onBack: () -> Unit) {
                 ) {
                     Text("Cancelar")
                 }
+            }
+
+            // Espacio final
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
