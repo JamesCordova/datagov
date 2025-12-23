@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
@@ -93,6 +96,7 @@ sealed class NavigationItem(
     val unselectedIcon: ImageVector
 ) {
     object Home : NavigationItem("home", "Proyectos", Icons.Filled.Home, Icons.Outlined.Home)
+    object Dashboard : NavigationItem("dashboard", "Dashboard", Icons.Filled.Info, Icons.Outlined.Info)
     object Meetings : NavigationItem("meetings", "Meetings", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     object Settings : NavigationItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -101,6 +105,7 @@ sealed class Screen {
     object First : Screen()
     data class Second(val projectId: String) : Screen()
     object Third : Screen()
+    object Dashboard : Screen()
     object Meetings : Screen()
     object AddMeeting : Screen()
     data class MeetingDetail(val meetingId: Long) : Screen()
@@ -114,6 +119,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
 
     val navigationItems = listOf(
         NavigationItem.Home,
+        NavigationItem.Dashboard,
         NavigationItem.Meetings,
         NavigationItem.Settings
     )
@@ -135,8 +141,9 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                             selectedTab = index
                             currentScreen = when (index) {
                                 0 -> Screen.First
-                                1 -> Screen.Meetings
-                                2 -> Screen.Settings
+                                1 -> Screen.Dashboard
+                                2 -> Screen.Meetings
+                                3 -> Screen.Settings
                                 else -> Screen.First
                             }
                         }
@@ -176,6 +183,9 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                             selectedTab = 0
                         }
                     )
+                }
+                is Screen.Dashboard -> {
+                    DashboardScreen()
                 }
                 is Screen.Meetings -> {
                     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1832,6 +1842,616 @@ fun SettingsScreen(themePreferences: ThemePreferences) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardScreen() {
+    val database = FirebaseDatabase.getInstance()
+    val projectsRef = database.getReference("Projects")
+    val categoriesRef = database.getReference("Category")
+    val projects = remember { mutableStateListOf<Project>() }
+    val categories = remember { mutableStateListOf<Category>() }
+    val isLoading = remember { mutableStateOf(true) }
+
+    // Cargar categorías
+    LaunchedEffect(Unit) {
+        categoriesRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                categories.clear()
+                for (categorySnapshot in snapshot.children) {
+                    try {
+                        val id = categorySnapshot.child("id").getValue(String::class.java) ?: ""
+                        val title = categorySnapshot.child("title").getValue(String::class.java) ?: ""
+                        val picUrl = categorySnapshot.child("picUrl").getValue(String::class.java) ?: ""
+                        categories.add(Category(id = id, title = title, picUrl = picUrl))
+                    } catch (e: Exception) {
+                        Log.e("Dashboard", "Error al cargar categoría", e)
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Dashboard", "Error al leer categorías: ${error.message}")
+            }
+        })
+    }
+
+    // Cargar proyectos
+    LaunchedEffect(Unit) {
+        projectsRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                projects.clear()
+                for (projectSnapshot in snapshot.children) {
+                    try {
+                        val id = projectSnapshot.key ?: ""
+                        val name = projectSnapshot.child("name").getValue(String::class.java) ?: ""
+                        val ubicacion = projectSnapshot.child("ubicacion").getValue(String::class.java) ?: ""
+                        val description = projectSnapshot.child("description").getValue(String::class.java) ?: ""
+                        val picUrl = projectSnapshot.child("picUrl").getValue(String::class.java) ?: ""
+
+                        val categoryIdRaw = projectSnapshot.child("categoryId").value
+                        val categoryId = when (categoryIdRaw) {
+                            is String -> categoryIdRaw
+                            is Long -> categoryIdRaw.toString()
+                            is Int -> categoryIdRaw.toString()
+                            else -> "0"
+                        }
+
+                        val createdAt = projectSnapshot.child("createdAt").getValue(Long::class.java) ?: System.currentTimeMillis()
+
+                        val presupuestoRaw = projectSnapshot.child("presupuesto").value
+                        val presupuesto = when (presupuestoRaw) {
+                            is Double -> presupuestoRaw.toLong()
+                            is Long -> presupuestoRaw
+                            is Int -> presupuestoRaw.toLong()
+                            is String -> presupuestoRaw.toDoubleOrNull()?.toLong() ?: 0L
+                            else -> 0L
+                        }
+
+                        val avanceRaw = projectSnapshot.child("avance").value
+                        val avance = when (avanceRaw) {
+                            is Double -> avanceRaw.toInt()
+                            is Int -> avanceRaw
+                            is Long -> avanceRaw.toInt()
+                            is String -> avanceRaw.toDoubleOrNull()?.toInt() ?: 0
+                            else -> 0
+                        }
+
+                        val project = Project(
+                            id = id,
+                            name = name,
+                            ubicacion = ubicacion,
+                            categoryId = categoryId,
+                            createdAt = createdAt,
+                            description = description,
+                            presupuesto = presupuesto,
+                            avance = avance,
+                            picUrl = picUrl
+                        )
+                        projects.add(project)
+                    } catch (e: Exception) {
+                        Log.e("Dashboard", "Error al mapear proyecto", e)
+                    }
+                }
+                isLoading.value = false
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("Dashboard", "Error al leer proyectos: ${error.message}")
+                isLoading.value = false
+            }
+        })
+    }
+
+    // Cálculos de estadísticas
+    val totalProyectos = projects.size
+    val presupuestoTotal = projects.sumOf { it.presupuesto }
+    val avancePromedio = if (projects.isNotEmpty()) projects.map { it.avance }.average() else 0.0
+    val proyectosCompletados = projects.count { it.avance >= 100 }
+    val proyectosEnProgreso = projects.count { it.avance > 0 && it.avance < 100 }
+    val proyectosNoIniciados = projects.count { it.avance == 0 }
+
+    // Proyectos por categoría
+    val proyectosPorCategoria = categories.map { category ->
+        category to projects.count { it.categoryId == category.id }
+    }.sortedByDescending { it.second }
+
+    // Top 5 proyectos con mayor presupuesto
+    val topProyectosPorPresupuesto = projects.sortedByDescending { it.presupuesto }.take(5)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Dashboard") }
+            )
+        }
+    ) { innerPadding ->
+        if (isLoading.value) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Encabezado
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(4.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp)
+                        ) {
+                            Text(
+                                text = "📊 Resumen General",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Vista general de todos los proyectos",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
+                // Tarjetas de estadísticas principales
+                item {
+                    Text(
+                        text = "Estadísticas Principales",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Total de proyectos
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            ),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "📁",
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "$totalProyectos",
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Proyectos",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Avance promedio
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            ),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "📈",
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "${String.format("%.1f", avancePromedio)}%",
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = "Avance Promedio",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    // Presupuesto total
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "💰 Presupuesto Total",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", presupuestoTotal.toDouble())}",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+                }
+
+                // Estado de los proyectos
+                item {
+                    Text(
+                        text = "Estado de Proyectos",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            // Completados
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.primary,
+                                            shape = RoundedCornerShape(50)
+                                        )
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Completados",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "$proyectosCompletados",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            HorizontalDivider()
+
+                            // En progreso
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.secondary,
+                                            shape = RoundedCornerShape(50)
+                                        )
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "En Progreso",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "$proyectosEnProgreso",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            HorizontalDivider()
+
+                            // No iniciados
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.tertiary,
+                                            shape = RoundedCornerShape(50)
+                                        )
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "No Iniciados",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "$proyectosNoIniciados",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+
+                            // Gráfica simple de barras
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            val maxValue = maxOf(proyectosCompletados, proyectosEnProgreso, proyectosNoIniciados).toFloat()
+
+                            if (maxValue > 0) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Barra completados
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(proyectosCompletados / maxValue)
+                                                .height(24.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.primary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                        if (proyectosCompletados / maxValue < 1f) {
+                                            Box(modifier = Modifier.weight(1f - (proyectosCompletados / maxValue)))
+                                        }
+                                    }
+
+                                    // Barra en progreso
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(proyectosEnProgreso / maxValue)
+                                                .height(24.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.secondary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                        if (proyectosEnProgreso / maxValue < 1f) {
+                                            Box(modifier = Modifier.weight(1f - (proyectosEnProgreso / maxValue)))
+                                        }
+                                    }
+
+                                    // Barra no iniciados
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(proyectosNoIniciados / maxValue)
+                                                .height(24.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.tertiary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                )
+                                        )
+                                        if (proyectosNoIniciados / maxValue < 1f) {
+                                            Box(modifier = Modifier.weight(1f - (proyectosNoIniciados / maxValue)))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Proyectos por categoría
+                item {
+                    Text(
+                        text = "Proyectos por Categoría",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            if (proyectosPorCategoria.isNotEmpty()) {
+                                val maxCategoryValue = proyectosPorCategoria.firstOrNull()?.second?.toFloat() ?: 1f
+
+                                proyectosPorCategoria.take(8).forEach { (category, count) ->
+                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = category.title,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                text = "$count",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(count / maxCategoryValue)
+                                                    .height(8.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primary,
+                                                        shape = RoundedCornerShape(4.dp)
+                                                    )
+                                            )
+                                            if (count / maxCategoryValue < 1f) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f - (count / maxCategoryValue))
+                                                        .height(8.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "No hay datos disponibles",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Top proyectos por presupuesto
+                item {
+                    Text(
+                        text = "Top 5 Proyectos por Presupuesto",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                items(topProyectosPorPresupuesto) { project ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = project.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 2
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", project.presupuesto.toDouble())}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Badge de avance
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = when {
+                                        project.avance >= 100 -> MaterialTheme.colorScheme.primaryContainer
+                                        project.avance >= 50 -> MaterialTheme.colorScheme.secondaryContainer
+                                        else -> MaterialTheme.colorScheme.tertiaryContainer
+                                    }
+                                )
+                            ) {
+                                Text(
+                                    text = "${project.avance}%",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Espacio final
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
         }
     }
 }
