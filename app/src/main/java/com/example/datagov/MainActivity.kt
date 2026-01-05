@@ -16,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import android.content.res.Configuration
 import com.example.datagov.ui.theme.DataGovTheme
@@ -37,17 +36,16 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +57,10 @@ import com.example.datagov.ui.meetings.MeetingDetailScreen
 import com.example.datagov.workers.WorkManagerScheduler
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.net.Uri
+import androidx.core.net.toUri
 import android.content.IntentFilter
+import java.util.Locale
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 import com.example.datagov.services.TimerService
@@ -70,8 +71,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.datagov.auth.AuthViewModel
 import com.example.datagov.auth.LoginScreen
 import com.example.datagov.auth.SignUpScreen
-// import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,6 +140,7 @@ fun AuthNavigation(
 }
 
 // Modelos para la navegación
+@Suppress("unused")
 sealed class NavigationItem(
     val route: String,
     val title: String,
@@ -148,7 +148,7 @@ sealed class NavigationItem(
     val unselectedIcon: ImageVector
 ) {
     object Dashboard : NavigationItem("dashboard", "Dashboard", Icons.Filled.Home, Icons.Outlined.Home)
-    object Home : NavigationItem("home", "Proyectos", Icons.Filled.List, Icons.Outlined.List)
+    object Home : NavigationItem("home", "Proyectos", Icons.AutoMirrored.Filled.List, Icons.AutoMirrored.Outlined.List)
     object Meetings : NavigationItem("meetings", "Meetings", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     object Settings : NavigationItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
@@ -165,6 +165,7 @@ sealed class Screen {
 }
 
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferences, onSignOut: () -> Unit) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     var selectedTab by remember { mutableStateOf(0) }
@@ -286,7 +287,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     )
                 }
                 is Screen.Meetings -> {
-                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val context = LocalContext.current
                     val database = remember { MeetingDatabase.getDatabase(context) }
                     val repository = remember { MeetingRepository(database.meetingDao()) }
 
@@ -301,7 +302,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     )
                 }
                 is Screen.AddMeeting -> {
-                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val context = LocalContext.current
                     val database = remember { MeetingDatabase.getDatabase(context) }
                     val repository = remember { MeetingRepository(database.meetingDao()) }
 
@@ -316,7 +317,7 @@ fun AppNavigation(modifier: Modifier = Modifier, themePreferences: ThemePreferen
                     )
                 }
                 is Screen.MeetingDetail -> {
-                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val context = LocalContext.current
                     val database = remember { MeetingDatabase.getDatabase(context) }
                     val repository = remember { MeetingRepository(database.meetingDao()) }
 
@@ -426,8 +427,7 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
                         }
 
                         // Manejar avance que puede venir como String o Number
-                        val avanceRaw = projectSnapshot.child("avance").value
-                        val avance = when (avanceRaw) {
+                        val avance = when (val avanceRaw = projectSnapshot.child("avance").value) {
                             is Double -> avanceRaw.toInt()
                             is Int -> avanceRaw
                             is Long -> avanceRaw.toInt()
@@ -792,6 +792,7 @@ fun FirstScreen(onNavigateToSecond: (String) -> Unit, onNavigateToThird: () -> U
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () -> Unit) {
     val database = FirebaseDatabase.getInstance()
     val projectsRef = database.getReference("Projects")
@@ -811,9 +812,9 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
                     val ubicacion = snapshot.child("ubicacion").getValue(String::class.java) ?: ""
                     val description = snapshot.child("description").getValue(String::class.java) ?: ""
                     val picUrl = snapshot.child("picUrl").getValue(String::class.java) ?: ""
+                    val codigoSnip = snapshot.child("codigo_snip").getValue(String::class.java) ?: ""
 
-                    val categoryIdRaw = snapshot.child("categoryId").value
-                    val categoryId = when (categoryIdRaw) {
+                    val categoryId = when (val categoryIdRaw = snapshot.child("categoryId").value) {
                         is String -> categoryIdRaw
                         is Long -> categoryIdRaw.toString()
                         is Int -> categoryIdRaw.toString()
@@ -831,8 +832,7 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
                         else -> 0L
                     }
 
-                    val avanceRaw = snapshot.child("avance").value
-                    val avance = when (avanceRaw) {
+                    val avance = when (val avanceRaw = snapshot.child("avance").value) {
                         is Double -> avanceRaw.toInt()
                         is Int -> avanceRaw
                         is Long -> avanceRaw.toInt()
@@ -849,7 +849,8 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
                         description = description,
                         presupuesto = presupuesto,
                         avance = avance,
-                        picUrl = picUrl
+                        picUrl = picUrl,
+                        codigo_snip = codigoSnip
                     )
                     
                     // Cargar la categoría
@@ -886,11 +887,30 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
 
     Scaffold(
         topBar = {
+            val context = LocalContext.current
             TopAppBar(
                 title = { Text("Detalle del Proyecto") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver")
+                    }
+                },
+                actions = {
+                    // Mostrar el botón solo si el proyecto tiene codigo_snip
+                    if (project?.codigo_snip?.isNotEmpty() == true) {
+                        IconButton(
+                            onClick = {
+                                val url = "https://ofi5.mef.gob.pe/ssi/Ssi/Index?codigo=${project?.codigo_snip}&tipo=2"
+                                val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Ver en portal MEF",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             )
@@ -1028,7 +1048,7 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "S/ ${String.format("%,.0f", project!!.presupuesto.toDouble())}",
+                                text = "S/ ${String.format(Locale.forLanguageTag("es-PE"), "%,.0f", project!!.presupuesto.toDouble())}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -1084,7 +1104,7 @@ fun SecondScreen(projectId: String, onBack: () -> Unit, onNavigateToThird: () ->
 
                 // Fecha de creación
                 Text(
-                    text = "Creado: ${java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(project!!.createdAt))}",
+                    text = "Creado: ${java.text.SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(java.util.Date(project!!.createdAt))}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1365,7 +1385,7 @@ fun ThirdScreen(onBack: () -> Unit) {
                     supportingText = {
                         if (presupuestoText.isNotEmpty()) {
                             val valor = presupuestoText.toDoubleOrNull() ?: 0.0
-                            Text("≈ S/ ${String.format(java.util.Locale("es", "PE"), "%,.2f", valor)}")
+                            Text("≈ S/ ${String.format(Locale.forLanguageTag("es-PE"), "%,.2f", valor)}")
                         }
                     }
                 )
@@ -1825,7 +1845,7 @@ fun SettingsScreen(themePreferences: ThemePreferences, onSignOut: () -> Unit = {
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val context = LocalContext.current
                     var showTestMessage by remember { mutableStateOf(false) }
 
                     Button(
@@ -2136,8 +2156,7 @@ fun DashboardScreen(onNavigateToProjectDetail: (String) -> Unit = {}) {
                             else -> 0L
                         }
 
-                        val avanceRaw = projectSnapshot.child("avance").value
-                        val avance = when (avanceRaw) {
+                        val avance = when (val avanceRaw = projectSnapshot.child("avance").value) {
                             is Double -> avanceRaw.toInt()
                             is Int -> avanceRaw
                             is Long -> avanceRaw.toInt()
@@ -2321,7 +2340,7 @@ fun DashboardScreen(onNavigateToProjectDetail: (String) -> Unit = {}) {
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "${String.format("%.1f", avancePromedio)}%",
+                                    text = "${String.format(Locale.US, "%.1f", avancePromedio)}%",
                                     style = MaterialTheme.typography.headlineLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.secondary
@@ -2369,7 +2388,7 @@ fun DashboardScreen(onNavigateToProjectDetail: (String) -> Unit = {}) {
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", presupuestoTotal.toDouble())}",
+                                text = "S/ ${String.format(Locale.forLanguageTag("es-PE"), "%,.0f", presupuestoTotal.toDouble())}",
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.tertiary
@@ -2779,7 +2798,7 @@ fun DashboardScreen(onNavigateToProjectDetail: (String) -> Unit = {}) {
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
                                                 Text(
-                                                    text = "S/ ${String.format(java.util.Locale("es", "PE"), "%,.0f", project.presupuesto.toDouble())}",
+                                                    text = "S/ ${String.format(Locale.forLanguageTag("es-PE"), "%,.0f", project.presupuesto.toDouble())}",
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.primary,
                                                     fontWeight = FontWeight.Bold
