@@ -57,7 +57,6 @@ import com.example.datagov.ui.meetings.MeetingDetailScreen
 import com.example.datagov.workers.WorkManagerScheduler
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.net.Uri
 import androidx.core.net.toUri
 import android.content.IntentFilter
 import java.util.Locale
@@ -67,11 +66,13 @@ import com.example.datagov.services.TimerService
 import android.content.Intent
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.datagov.auth.AuthViewModel
 import com.example.datagov.auth.LoginScreen
 import com.example.datagov.auth.SignUpScreen
 
+@Suppress("UNCHECKED_CAST")
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
