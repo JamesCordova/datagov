@@ -9,6 +9,7 @@ data class Project(
     val description: String = "",
     val presupuesto: Long = 0L,
     val avance: Int = 0,
-    val picUrl: String = ""
+    val picUrl: String = "",
+    val codigo_snip: String = ""
 )
 
