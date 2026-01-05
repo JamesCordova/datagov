@@ -1321,6 +1321,7 @@ fun ThirdScreen(onBack: () -> Unit) {
                     expanded = expandedCategory,
                     onExpandedChange = { expandedCategory = !expandedCategory && !isLoading }
                 ) {
+                    @Suppress("DEPRECATION")
                     OutlinedTextField(
                         value = categories.find { it.id == selectedCategoryId }?.title ?: "Selecciona una categoría",
                         onValueChange = {},
