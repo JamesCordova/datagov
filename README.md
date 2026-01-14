@@ -20,13 +20,13 @@ Para ejecutar la aplicación necesita:
 **Opción A: Desde Android Studio**
 1. Abra Android Studio
 2. Seleccione **"Get from VCS"** en la pantalla de bienvenida
-3. En el campo URL, pegue: `https://github.com/usuario/DataGov.git`
+3. En el campo URL, pegue: `https://github.com/JamesCordova/DataGov.git`
 4. Seleccione el directorio donde desee guardar el proyecto
 5. Haga clic en **"Clone"**
 
 **Opción B: Clonar desde terminal y abrir en Android Studio**
 1. Abra una terminal o PowerShell
-2. Ejecute el comando: `git clone https://github.com/usuario/DataGov.git`
+2. Ejecute el comando: `git clone https://github.com/JamesCordova/DataGov.git`
 3. Abra Android Studio
 4. Seleccione **"Open"**
 5. Navegue hasta la carpeta clonada `DataGov` y selecciónela
